@@ -1,0 +1,7 @@
+{
+  "scripts": {
+    "build": "tsc",
+    "lint": "eslint \"src/**/*.ts\"",
+    "test": "vitest"
+  }
+}
