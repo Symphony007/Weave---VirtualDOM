@@ -9,7 +9,6 @@ import { createVNode } from './vnode.js';
 
 /**
  * Public VNode factory.
- * This is the only user-facing way to describe UI intent.
  */
 export function h(
   type: VNodeType,
@@ -33,13 +32,13 @@ export function h(
  * Rules:
  * - null / undefined / boolean → ignored
  * - number → string
- * - nested arrays → flattened
- * - VNodes preserved as-is
+ * - string → string
+ * - array → flattened
+ * - mixed text + elements → ❌ disallowed (for now)
  */
 function normalizeChildren(input: unknown[]): VNodeChildren {
-  const result: VNode[] = [];
-  let hasText = false;
-  let text = '';
+  const elements: VNode[] = [];
+  let text: string | null = null;
 
   const walk = (child: unknown): void => {
     if (
@@ -51,35 +50,28 @@ function normalizeChildren(input: unknown[]): VNodeChildren {
     }
 
     if (Array.isArray(child)) {
-      for (const c of child) walk(c);
+      child.forEach(walk);
       return;
     }
 
-    if (typeof child === 'number') {
-      hasText = true;
-      text += String(child);
+    if (typeof child === 'number' || typeof child === 'string') {
+      text = (text ?? '') + String(child);
       return;
     }
 
-    if (typeof child === 'string') {
-      hasText = true;
-      text += child;
-      return;
-    }
-
-    // Assume VNode
-    result.push(child as VNode);
+    elements.push(child as VNode);
   };
 
-  for (const c of input) walk(c);
+  input.forEach(walk);
 
-  if (hasText && result.length === 0) {
-    return text;
+  if (elements.length > 0 && text !== null) {
+    throw new Error(
+      'Mixed text and element children are not supported yet'
+    );
   }
 
-  if (hasText) {
-    result.unshift(createVNode('#text', null, text));
-  }
+  if (elements.length > 0) return elements;
+  if (text !== null) return text;
 
-  return result.length > 0 ? result : null;
+  return null;
 }

@@ -28,25 +28,22 @@ export function createRenderer<Node extends { textContent?: string }>(
       const parentMap = new Map<VNode, Node>();
 
       function createNode(vnode: VNode, parent: Node): Node {
-        let node: Node;
+        const node = host.createElement(vnode.type as string);
+
+        if (vnode.props) {
+          for (const key in vnode.props) {
+            host.setProp(node, key, vnode.props[key]);
+          }
+        }
 
         if (typeof vnode.children === 'string') {
-          node = host.createText(vnode.children);
-        } else {
-          node = host.createElement(vnode.type as string);
-
-          if (vnode.props) {
-            for (const key in vnode.props) {
-              host.setProp(node, key, vnode.props[key]);
-            }
-          }
-
-          if (Array.isArray(vnode.children)) {
-            vnode.children.forEach((child: VNode, index: number) => {
-              const childNode = createNode(child, node);
-              host.insert(node, childNode, index);
-            });
-          }
+          const textNode = host.createText(vnode.children);
+          host.insert(node, textNode, 0);
+        } else if (Array.isArray(vnode.children)) {
+          vnode.children.forEach((child: VNode, index: number) => {
+            const childNode = createNode(child, node);
+            host.insert(node, childNode, index);
+          });
         }
 
         nodeMap.set(vnode, node);
@@ -55,6 +52,7 @@ export function createRenderer<Node extends { textContent?: string }>(
         return node;
       }
 
+
       function commit(patches: Patch[]): void {
         for (const patch of patches) {
           switch (patch.type) {
@@ -62,6 +60,8 @@ export function createRenderer<Node extends { textContent?: string }>(
               if (rootNode) {
                 host.remove(rootNode);
                 rootNode = null;
+                nodeMap.clear();
+                parentMap.clear();
               }
 
               if (patch.vnode !== null) {
@@ -73,9 +73,7 @@ export function createRenderer<Node extends { textContent?: string }>(
             }
 
             case 'UPDATE_TEXT': {
-              if (!currentVNode) break;
-
-              const node = nodeMap.get(currentVNode);
+              const node = nodeMap.get(patch.vnode);
               if (node && typeof node.textContent === 'string') {
                 node.textContent = patch.value;
               }
@@ -83,8 +81,7 @@ export function createRenderer<Node extends { textContent?: string }>(
             }
 
             case 'SET_PROP': {
-              if (!currentVNode) break;
-              const node = nodeMap.get(currentVNode);
+              const node = nodeMap.get(patch.vnode);
               if (node) {
                 host.setProp(node, patch.key, patch.value);
               }
@@ -92,8 +89,7 @@ export function createRenderer<Node extends { textContent?: string }>(
             }
 
             case 'REMOVE_PROP': {
-              if (!currentVNode) break;
-              const node = nodeMap.get(currentVNode);
+              const node = nodeMap.get(patch.vnode);
               if (node) {
                 host.removeProp(node, patch.key);
               }
@@ -101,23 +97,35 @@ export function createRenderer<Node extends { textContent?: string }>(
             }
 
             case 'INSERT': {
-              const parentNode = rootNode ?? container;
+              const parentNode = nodeMap.get(patch.parent);
+              if (!parentNode) break;
+
               const childNode = createNode(patch.vnode, parentNode);
               host.insert(parentNode, childNode, patch.index);
               break;
             }
 
             case 'REMOVE': {
-              if (!currentVNode || !Array.isArray(currentVNode.children)) break;
-              const vnodeToRemove = currentVNode.children[patch.index];
-              const node = nodeMap.get(vnodeToRemove);
-              if (node) {
-                host.remove(node);
-                nodeMap.delete(vnodeToRemove);
-                parentMap.delete(vnodeToRemove);
-              }
+              const node = nodeMap.get(patch.vnode);
+              if (!node) break;
+
+              host.remove(node);
+              nodeMap.delete(patch.vnode);
+              parentMap.delete(patch.vnode);
               break;
             }
+
+            case 'MOVE': {
+              const parentNode = nodeMap.get(patch.parent);
+              const childNode = nodeMap.get(patch.vnode);
+              if (!parentNode || !childNode) break;
+
+              // IMPORTANT:
+              // insertBefore automatically moves an existing node
+              host.insert(parentNode, childNode, patch.to);
+              break;
+            }
+
           }
         }
       }
@@ -133,6 +141,8 @@ export function createRenderer<Node extends { textContent?: string }>(
           host.remove(rootNode);
           rootNode = null;
           currentVNode = null;
+          nodeMap.clear();
+          parentMap.clear();
         }
       }
 
