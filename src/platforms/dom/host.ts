@@ -2,6 +2,15 @@ import type { HostConfig } from '../../renderer/createRenderer.js';
 
 type DomNode = HTMLElement | Text;
 
+/**
+ * Stores event listeners per element.
+ * WeakMap ensures garbage collection when nodes are removed.
+ */
+const eventListenerMap = new WeakMap<
+  HTMLElement,
+  Map<string, EventListener>
+>();
+
 export const domHost: HostConfig<DomNode> = {
   createElement(type: string): HTMLElement {
     return document.createElement(type);
@@ -14,13 +23,27 @@ export const domHost: HostConfig<DomNode> = {
   setProp(node: DomNode, key: string, value: unknown): void {
     if (!(node instanceof HTMLElement)) return;
 
-    // Event handling will be added later
+    // ---- EVENT HANDLING ----
     if (key.startsWith('on') && typeof value === 'function') {
       const eventName = key.slice(2).toLowerCase();
+
+      let listeners = eventListenerMap.get(node);
+      if (!listeners) {
+        listeners = new Map();
+        eventListenerMap.set(node, listeners);
+      }
+
+      const existing = listeners.get(eventName);
+      if (existing) {
+        node.removeEventListener(eventName, existing);
+      }
+
       node.addEventListener(eventName, value as EventListener);
+      listeners.set(eventName, value as EventListener);
       return;
     }
 
+    // ---- ATTRIBUTE HANDLING ----
     if (value === false || value === null || value === undefined) {
       node.removeAttribute(key);
       return;
@@ -34,8 +57,13 @@ export const domHost: HostConfig<DomNode> = {
 
     if (key.startsWith('on')) {
       const eventName = key.slice(2).toLowerCase();
-      // Listener removal will be improved later
-      node.removeEventListener(eventName, () => {});
+      const listeners = eventListenerMap.get(node);
+      const listener = listeners?.get(eventName);
+
+      if (listener) {
+        node.removeEventListener(eventName, listener);
+        listeners!.delete(eventName);
+      }
       return;
     }
 

@@ -1,5 +1,3 @@
-// src/core/types.ts
-
 /**
  * A VNode represents an immutable description of UI intent.
  * It contains no platform-specific or stateful logic.
@@ -13,10 +11,40 @@
 export type VNodeType = string | symbol;
 
 /**
- * Props are plain key-value pairs.
- * They must be treated as immutable by the system.
+ * Stable identity hint for reconciliation.
  */
-export type VNodeProps = Readonly<Record<string, unknown>> | null;
+export type VNodeKey = string | number | null;
+
+/**
+ * Lifecycle hooks for a VNode.
+ * Hooks are observational only — they must not affect diffing.
+ */
+export interface VNodeHooks<Node = unknown> {
+  /**
+   * Called after the DOM node is created.
+   */
+  create?: (vnode: VNode, node: Node) => void;
+
+  /**
+   * Called after a VNode is updated but identity is preserved.
+   */
+  update?: (oldVNode: VNode, newVNode: VNode, node: Node) => void;
+
+  /**
+   * Called before a DOM node is removed.
+   * Removal is delayed until `done()` is called.
+   */
+  remove?: (vnode: VNode, node: Node, done: () => void) => void;
+}
+
+/**
+ * Props are plain key-value pairs.
+ * Hooks live under the reserved `hooks` key.
+ */
+export type VNodeProps = Readonly<{
+  hooks?: VNodeHooks;
+  [key: string]: unknown;
+}> | null;
 
 /**
  * A VNode may have:
@@ -27,11 +55,6 @@ export type VNodeProps = Readonly<Record<string, unknown>> | null;
  * Mixed children are normalized elsewhere.
  */
 export type VNodeChildren = string | readonly VNode[] | null;
-
-/**
- * Stable identity hint for reconciliation.
- */
-export type VNodeKey = string | number | null;
 
 /**
  * Core VNode interface.

@@ -25,14 +25,18 @@ export function createRenderer<Node extends { textContent?: string }>(
       let rootNode: Node | null = null;
 
       const nodeMap = new Map<VNode, Node>();
-      const parentMap = new Map<VNode, Node>();
 
-      function createNode(vnode: VNode, parent: Node): Node {
+      // -----------------------------
+      // Node creation
+      // -----------------------------
+      function createNode(vnode: VNode, _parent: Node): Node {
         const node = host.createElement(vnode.type as string);
 
         if (vnode.props) {
           for (const key in vnode.props) {
-            host.setProp(node, key, vnode.props[key]);
+            if (key !== 'hooks') {
+              host.setProp(node, key, vnode.props[key]);
+            }
           }
         }
 
@@ -40,19 +44,23 @@ export function createRenderer<Node extends { textContent?: string }>(
           const textNode = host.createText(vnode.children);
           host.insert(node, textNode, 0);
         } else if (Array.isArray(vnode.children)) {
-          vnode.children.forEach((child: VNode, index: number) => {
+          vnode.children.forEach((child, index) => {
             const childNode = createNode(child, node);
             host.insert(node, childNode, index);
           });
         }
 
         nodeMap.set(vnode, node);
-        parentMap.set(vnode, parent);
+
+        // CREATE hook
+        vnode.props?.hooks?.create?.(vnode, node);
 
         return node;
       }
 
-
+      // -----------------------------
+      // Patch commit
+      // -----------------------------
       function commit(patches: Patch[]): void {
         for (const patch of patches) {
           switch (patch.type) {
@@ -61,7 +69,6 @@ export function createRenderer<Node extends { textContent?: string }>(
                 host.remove(rootNode);
                 rootNode = null;
                 nodeMap.clear();
-                parentMap.clear();
               }
 
               if (patch.vnode !== null) {
@@ -105,31 +112,52 @@ export function createRenderer<Node extends { textContent?: string }>(
               break;
             }
 
-            case 'REMOVE': {
-              const node = nodeMap.get(patch.vnode);
-              if (!node) break;
-
-              host.remove(node);
-              nodeMap.delete(patch.vnode);
-              parentMap.delete(patch.vnode);
-              break;
-            }
-
             case 'MOVE': {
               const parentNode = nodeMap.get(patch.parent);
               const childNode = nodeMap.get(patch.vnode);
               if (!parentNode || !childNode) break;
 
-              // IMPORTANT:
-              // insertBefore automatically moves an existing node
+              // insertBefore moves if already attached
               host.insert(parentNode, childNode, patch.to);
               break;
             }
 
+            case 'REMOVE': {
+              const node = nodeMap.get(patch.vnode);
+              if (!node) break;
+
+              const removeHook = patch.vnode.props?.hooks?.remove;
+
+              if (removeHook) {
+                removeHook(patch.vnode, node, () => {
+                  host.remove(node);
+                  nodeMap.delete(patch.vnode);
+                });
+              } else {
+                host.remove(node);
+                nodeMap.delete(patch.vnode);
+              }
+              break;
+            }
+
+            case 'UPDATE': {
+              const node = nodeMap.get(patch.oldVNode);
+              if (!node) break;
+
+              patch.newVNode.props?.hooks?.update?.(
+                patch.oldVNode,
+                patch.newVNode,
+                node
+              );
+              break;
+            }
           }
         }
       }
 
+      // -----------------------------
+      // Public API
+      // -----------------------------
       function update(nextVNode: VNode): void {
         const patches = diff(currentVNode, nextVNode);
         commit(patches);
@@ -142,10 +170,10 @@ export function createRenderer<Node extends { textContent?: string }>(
           rootNode = null;
           currentVNode = null;
           nodeMap.clear();
-          parentMap.clear();
         }
       }
 
+      // Initial mount
       update(vnode);
 
       return { update, unmount };

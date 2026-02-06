@@ -9,10 +9,11 @@ import type { VNode } from './types.js';
 
 /**
  * Replace an entire subtree.
+ * vnode === null means unmount.
  */
 export interface ReplacePatch {
   readonly type: 'REPLACE';
-  readonly vnode: VNode;
+  readonly vnode: VNode | null;
 }
 
 /**
@@ -36,9 +37,6 @@ export interface InsertPatch {
 
 /**
  * Remove a child from a parent.
- *
- * IMPORTANT:
- * Removal is identity-based, never index-based.
  */
 export interface RemovePatch {
   readonly type: 'REMOVE';
@@ -68,7 +66,8 @@ export interface RemovePropPatch {
 /**
  * Move a child within the same parent.
  *
- * Identity-based; indices are positional targets only.
+ * NOTE:
+ * `from` is metadata only — renderer uses identity-based moves.
  */
 export interface MovePatch {
   readonly type: 'MOVE';
@@ -76,6 +75,16 @@ export interface MovePatch {
   readonly vnode: VNode;
   readonly from: number;
   readonly to: number;
+}
+
+/**
+ * Notify that a vnode was updated but reused.
+ * Used for lifecycle hooks.
+ */
+export interface UpdatePatch {
+  readonly type: 'UPDATE';
+  readonly oldVNode: VNode;
+  readonly newVNode: VNode;
 }
 
 /**
@@ -88,4 +97,5 @@ export type Patch =
   | RemovePatch
   | SetPropPatch
   | RemovePropPatch
-  | MovePatch;
+  | MovePatch
+  | UpdatePatch;
