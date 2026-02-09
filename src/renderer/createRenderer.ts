@@ -1,6 +1,7 @@
 import type { VNode } from '../core/types.js';
 import type { Patch } from '../core/patch-types.js';
 import { diff } from '../core/diff.js';
+import { createMetrics, recordUpdate, updateSlowestPatchType } from './metrics.js'; // 🆕 Import helpers
 
 export interface HostConfig<Node> {
   createElement(type: string): Node;
@@ -14,6 +15,7 @@ export interface HostConfig<Node> {
 export interface Root {
   update(vnode: VNode): void;
   unmount(): void;
+  metrics: ReturnType<typeof createMetrics>;
 }
 
 export function createRenderer<Node extends { textContent?: string }>(
@@ -25,12 +27,12 @@ export function createRenderer<Node extends { textContent?: string }>(
       let rootNode: Node | null = null;
 
       const nodeMap = new Map<VNode, Node>();
+      const metrics = createMetrics();
 
-      // -----------------------------
-      // Node creation
-      // -----------------------------
       function createNode(vnode: VNode, _parent: Node): Node {
         const node = host.createElement(vnode.type as string);
+
+        metrics.nodes.created++;
 
         if (vnode.props) {
           for (const key in vnode.props) {
@@ -58,15 +60,16 @@ export function createRenderer<Node extends { textContent?: string }>(
         return node;
       }
 
-      // -----------------------------
-      // Patch commit
-      // -----------------------------
       function commit(patches: Patch[]): void {
         for (const patch of patches) {
+          metrics.patches.total++;
+          metrics.patches.byType[patch.type]++;
+
           switch (patch.type) {
             case 'REPLACE': {
               if (rootNode) {
                 host.remove(rootNode);
+                metrics.nodes.removed++;
                 rootNode = null;
                 nodeMap.clear();
               }
@@ -117,7 +120,6 @@ export function createRenderer<Node extends { textContent?: string }>(
               const childNode = nodeMap.get(patch.vnode);
               if (!parentNode || !childNode) break;
 
-              // insertBefore moves if already attached
               host.insert(parentNode, childNode, patch.to);
               break;
             }
@@ -128,55 +130,73 @@ export function createRenderer<Node extends { textContent?: string }>(
 
               const removeHook = patch.vnode.props?.hooks?.remove;
 
-              if (removeHook) {
-                removeHook(patch.vnode, node, () => {
-                  host.remove(node);
-                  nodeMap.delete(patch.vnode);
-                });
-              } else {
+              const finalizeRemoval = () => {
                 host.remove(node);
+                metrics.nodes.removed++;
                 nodeMap.delete(patch.vnode);
+              };
+
+              if (removeHook) {
+                removeHook(patch.vnode, node, finalizeRemoval);
+              } else {
+                finalizeRemoval();
               }
+
               break;
             }
 
             case 'UPDATE': {
               const node = nodeMap.get(patch.oldVNode);
-              if (!node) break;
+              if (node) {
+                // 🆕 Remap to new VNode
+                nodeMap.delete(patch.oldVNode);
+                nodeMap.set(patch.newVNode, node);
 
-              patch.newVNode.props?.hooks?.update?.(
-                patch.oldVNode,
-                patch.newVNode,
-                node
-              );
+                patch.newVNode.props?.hooks?.update?.(
+                  patch.oldVNode,
+                  patch.newVNode,
+                  node
+                );
+              }
               break;
             }
           }
         }
       }
 
-      // -----------------------------
-      // Public API
-      // -----------------------------
       function update(nextVNode: VNode): void {
+        const start = performance.now();
+
         const patches = diff(currentVNode, nextVNode);
         commit(patches);
         currentVNode = nextVNode;
+
+        const duration = performance.now() - start;
+
+        // 🆕 Record update with new helper
+        recordUpdate(metrics, duration, patches.length);
+        
+        // 🆕 Update slowest patch type
+        updateSlowestPatchType(metrics);
       }
 
       function unmount(): void {
         if (rootNode) {
           host.remove(rootNode);
+          metrics.nodes.removed++;
           rootNode = null;
           currentVNode = null;
           nodeMap.clear();
         }
       }
 
-      // Initial mount
       update(vnode);
 
-      return { update, unmount };
+      return {
+        update,
+        unmount,
+        metrics
+      };
     }
   };
 }

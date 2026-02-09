@@ -8,7 +8,7 @@
     <div id="app"></div>
 
     <script type="module">
-      import { h, mount } from '../dist/index.js';
+      import { h, mount } from '../dist/src/index.js';
 
       const vnode1 = h('h1', null, 'Hello from Weave');
       const vnode2 = h('h1', null, 'Updated text from Weave 🚀');
@@ -16,9 +16,7 @@
       const container = document.getElementById('app');
       const root = mount(vnode1, container);
 
-      setTimeout(() => {
-        root.update(vnode2);
-      }, 2000);
+      setTimeout(() => root.update(vnode2), 2000);
     </script>
 
   </body>
