@@ -1,7 +1,8 @@
 {
   "type": "module",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc --outDir dist",
+    "build:demo": "tsc demo/dashboard.ts --outDir dist/demo --module esnext --target es2020",
     "lint": "eslint \"src/**/*.ts\"",
     "test": "vitest"
   }

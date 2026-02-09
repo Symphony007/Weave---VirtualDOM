@@ -1,7 +1,9 @@
 import type { VNode } from '../core/types.js';
 import type { Patch } from '../core/patch-types.js';
 import { diff } from '../core/diff.js';
-import { createMetrics, recordUpdate, updateSlowestPatchType } from './metrics.js'; // 🆕 Import helpers
+import { createMetrics, recordUpdate, updateSlowestPatchType } from './metrics.js';
+
+type VNodeWithId = VNode & { __id: number };
 
 export interface HostConfig<Node> {
   createElement(type: string): Node;
@@ -26,36 +28,38 @@ export function createRenderer<Node extends { textContent?: string }>(
       let currentVNode: VNode | null = null;
       let rootNode: Node | null = null;
 
-      const nodeMap = new Map<VNode, Node>();
+      // ✅ Stable identity map
+      const nodeMap = new Map<number, Node>();
       const metrics = createMetrics();
 
       function createNode(vnode: VNode, _parent: Node): Node {
-        const node = host.createElement(vnode.type as string);
+        const v = vnode as VNodeWithId;
+        const node = host.createElement(v.type as string);
 
         metrics.nodes.created++;
 
-        if (vnode.props) {
-          for (const key in vnode.props) {
+        if (v.props) {
+          for (const key in v.props) {
             if (key !== 'hooks') {
-              host.setProp(node, key, vnode.props[key]);
+              host.setProp(node, key, v.props[key]);
             }
           }
         }
 
-        if (typeof vnode.children === 'string') {
-          const textNode = host.createText(vnode.children);
+        if (typeof v.children === 'string') {
+          const textNode = host.createText(v.children);
           host.insert(node, textNode, 0);
-        } else if (Array.isArray(vnode.children)) {
-          vnode.children.forEach((child, index) => {
+        } else if (Array.isArray(v.children)) {
+          v.children.forEach((child, index) => {
             const childNode = createNode(child, node);
             host.insert(node, childNode, index);
           });
         }
 
-        nodeMap.set(vnode, node);
+        nodeMap.set(v.__id, node);
 
         // CREATE hook
-        vnode.props?.hooks?.create?.(vnode, node);
+        v.props?.hooks?.create?.(v, node);
 
         return node;
       }
@@ -83,7 +87,8 @@ export function createRenderer<Node extends { textContent?: string }>(
             }
 
             case 'UPDATE_TEXT': {
-              const node = nodeMap.get(patch.vnode);
+              const v = patch.vnode as VNodeWithId;
+              const node = nodeMap.get(v.__id);
               if (node && typeof node.textContent === 'string') {
                 node.textContent = patch.value;
               }
@@ -91,7 +96,8 @@ export function createRenderer<Node extends { textContent?: string }>(
             }
 
             case 'SET_PROP': {
-              const node = nodeMap.get(patch.vnode);
+              const v = patch.vnode as VNodeWithId;
+              const node = nodeMap.get(v.__id);
               if (node) {
                 host.setProp(node, patch.key, patch.value);
               }
@@ -99,7 +105,8 @@ export function createRenderer<Node extends { textContent?: string }>(
             }
 
             case 'REMOVE_PROP': {
-              const node = nodeMap.get(patch.vnode);
+              const v = patch.vnode as VNodeWithId;
+              const node = nodeMap.get(v.__id);
               if (node) {
                 host.removeProp(node, patch.key);
               }
@@ -107,7 +114,8 @@ export function createRenderer<Node extends { textContent?: string }>(
             }
 
             case 'INSERT': {
-              const parentNode = nodeMap.get(patch.parent);
+              const parent = patch.parent as VNodeWithId;
+              const parentNode = nodeMap.get(parent.__id);
               if (!parentNode) break;
 
               const childNode = createNode(patch.vnode, parentNode);
@@ -116,28 +124,36 @@ export function createRenderer<Node extends { textContent?: string }>(
             }
 
             case 'MOVE': {
-              const parentNode = nodeMap.get(patch.parent);
-              const childNode = nodeMap.get(patch.vnode);
+              const parent = patch.parent as VNodeWithId;
+              const child = patch.vnode as VNodeWithId;
+
+              const parentNode = nodeMap.get(parent.__id);
+              const childNode = nodeMap.get(child.__id);
               if (!parentNode || !childNode) break;
 
+              // ✅ DOM-safe MOVE: remove then re-insert
+              host.remove(childNode);
               host.insert(parentNode, childNode, patch.to);
+
               break;
             }
 
+
             case 'REMOVE': {
-              const node = nodeMap.get(patch.vnode);
+              const v = patch.vnode as VNodeWithId;
+              const node = nodeMap.get(v.__id);
               if (!node) break;
 
-              const removeHook = patch.vnode.props?.hooks?.remove;
+              const removeHook = v.props?.hooks?.remove;
 
               const finalizeRemoval = () => {
                 host.remove(node);
                 metrics.nodes.removed++;
-                nodeMap.delete(patch.vnode);
+                nodeMap.delete(v.__id);
               };
 
               if (removeHook) {
-                removeHook(patch.vnode, node, finalizeRemoval);
+                removeHook(v, node, finalizeRemoval);
               } else {
                 finalizeRemoval();
               }
@@ -146,13 +162,15 @@ export function createRenderer<Node extends { textContent?: string }>(
             }
 
             case 'UPDATE': {
-              const node = nodeMap.get(patch.oldVNode);
-              if (node) {
-                // 🆕 Remap to new VNode
-                nodeMap.delete(patch.oldVNode);
-                nodeMap.set(patch.newVNode, node);
+              const oldV = patch.oldVNode as VNodeWithId;
+              const newV = patch.newVNode as VNodeWithId;
+              const node = nodeMap.get(oldV.__id);
 
-                patch.newVNode.props?.hooks?.update?.(
+              if (node) {
+                nodeMap.delete(oldV.__id);
+                nodeMap.set(newV.__id, node);
+
+                newV.props?.hooks?.update?.(
                   patch.oldVNode,
                   patch.newVNode,
                   node
@@ -173,10 +191,7 @@ export function createRenderer<Node extends { textContent?: string }>(
 
         const duration = performance.now() - start;
 
-        // 🆕 Record update with new helper
         recordUpdate(metrics, duration, patches.length);
-        
-        // 🆕 Update slowest patch type
         updateSlowestPatchType(metrics);
       }
 

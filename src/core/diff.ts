@@ -19,7 +19,6 @@ export function diff(
     return [];
   }
 
-  // ✅ Proper narrowing for TS
   if (oldVNode && newVNode) {
     return diffNonNull(oldVNode, newVNode);
   }
@@ -48,11 +47,14 @@ function diffNonNull(prev: VNode, next: VNode): Patch[] {
       });
     }
 
-    patches.push({
-      type: 'UPDATE',
-      oldVNode: prev,
-      newVNode: next
-    });
+    // ✅ Only emit UPDATE if hooks exist (optimization)
+    if (next.props?.hooks?.update) {
+      patches.push({
+        type: 'UPDATE',
+        oldVNode: prev,
+        newVNode: next
+      });
+    }
 
     return patches;
   }
@@ -62,6 +64,8 @@ function diffNonNull(prev: VNode, next: VNode): Patch[] {
   const newProps = next.props ?? {};
 
   for (const key in newProps) {
+    if (key === 'hooks') continue;
+
     if (newProps[key] !== oldProps[key]) {
       patches.push({
         type: 'SET_PROP',
@@ -73,6 +77,8 @@ function diffNonNull(prev: VNode, next: VNode): Patch[] {
   }
 
   for (const key in oldProps) {
+    if (key === 'hooks') continue;
+
     if (!(key in newProps)) {
       patches.push({
         type: 'REMOVE_PROP',
@@ -81,6 +87,7 @@ function diffNonNull(prev: VNode, next: VNode): Patch[] {
       });
     }
   }
+
 
   // ---- CHILDREN ----
   const oldChildren = Array.isArray(prev.children) ? prev.children : [];
@@ -93,11 +100,14 @@ function diffNonNull(prev: VNode, next: VNode): Patch[] {
   // ---- KEYED DIFF ----
   if (hasKeys) {
     const oldKeyMap = new Map<string | number, VNode>();
-    for (const child of oldChildren) {
+    const oldIndexMap = new Map<VNode, number>();
+
+    oldChildren.forEach((child, index) => {
       if (child.key != null) {
         oldKeyMap.set(child.key, child);
       }
-    }
+      oldIndexMap.set(child, index);
+    });
 
     const usedOld = new Set<VNode>();
 
@@ -122,13 +132,13 @@ function diffNonNull(prev: VNode, next: VNode): Patch[] {
             vnode: newChild,
             index: newIndex
           });
-          usedOld.add(oldChild); 
+
           return;
         }
 
         patches.push(...diffNonNull(oldChild, newChild));
 
-        const oldIndex = oldChildren.indexOf(oldChild);
+        const oldIndex = oldIndexMap.get(oldChild)!;
         if (oldIndex !== newIndex) {
           patches.push({
             type: 'MOVE',
@@ -205,11 +215,13 @@ function diffNonNull(prev: VNode, next: VNode): Patch[] {
   }
 
   // ---- FINAL UPDATE (ONCE) ----
-  patches.push({
-    type: 'UPDATE',
-    oldVNode: prev,
-    newVNode: next
-  });
+  if (next.props?.hooks?.update) {
+    patches.push({
+      type: 'UPDATE',
+      oldVNode: prev,
+      newVNode: next
+    });
+  }
 
   return patches;
 }

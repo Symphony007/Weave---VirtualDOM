@@ -15,9 +15,9 @@ export interface RendererMetrics {
     created: number;
     removed: number;
     active: number;
+    history: number[];
   };
 
-  // Historical Data for Charts
   history: {
     durations: number[];
     timestamps: number[];
@@ -25,18 +25,17 @@ export interface RendererMetrics {
     maxHistorySize: number;
   };
 
-  // Performance Tracking
   performance: {
     fps: number;
     peakUpdateMs: number;
     slowestPatchType: Patch['type'] | null;
+    updatesPerSecond: number;
   };
 
-  // Real-time Counters
   counters: {
-    updatesPerSecond: number;
-    patchesPerUpdate: number;
-    lastFpsUpdate: number;
+    fpsWindowStart: number;
+    fpsWindowUpdates: number;
+    lastSecondUpdates: number;
   };
 }
 
@@ -64,7 +63,8 @@ export function createMetrics(): RendererMetrics {
     nodes: {
       created: 0,
       removed: 0,
-      active: 0
+      active: 0,
+      history: []
     },
 
     history: {
@@ -77,13 +77,14 @@ export function createMetrics(): RendererMetrics {
     performance: {
       fps: 0,
       peakUpdateMs: 0,
-      slowestPatchType: null
+      slowestPatchType: null,
+      updatesPerSecond: 0
     },
 
     counters: {
-      updatesPerSecond: 0,
-      patchesPerUpdate: 0,
-      lastFpsUpdate: Date.now()
+      fpsWindowStart: performance.now(),
+      fpsWindowUpdates: 0,
+      lastSecondUpdates: 0
     }
   };
 }
@@ -98,53 +99,70 @@ export function recordUpdate(
 ): void {
   const now = performance.now();
 
+  // ---- BASIC COUNTERS ----
   metrics.updates++;
   metrics.lastUpdateDurationMs = duration;
   metrics.totalUpdateDurationMs += duration;
-  metrics.avgUpdateDurationMs = metrics.totalUpdateDurationMs / metrics.updates;
+  
+  // Safe average calculation (avoid division by zero)
+  metrics.avgUpdateDurationMs = metrics.updates > 0 
+    ? metrics.totalUpdateDurationMs / metrics.updates 
+    : 0;
 
-  // Track peak performance
+  // ---- PEAK UPDATE ----
   if (duration > metrics.performance.peakUpdateMs) {
     metrics.performance.peakUpdateMs = duration;
   }
 
-  // Update history (circular buffer)
+  // ---- HISTORY (FOR CHARTS) ----
   const { history } = metrics;
-  
+
   history.durations.push(duration);
   history.timestamps.push(now);
   history.patchCounts.push(patchCount);
 
-  // Keep only last N entries
   if (history.durations.length > history.maxHistorySize) {
     history.durations.shift();
     history.timestamps.shift();
     history.patchCounts.shift();
   }
 
-  // Calculate FPS (updates per second)
-  const timeSinceLastFps = now - metrics.counters.lastFpsUpdate;
-  if (timeSinceLastFps >= 1000) {
-    const recentUpdates = history.timestamps.filter(
-      t => now - t <= 1000
-    ).length;
+  // ---- FPS CALCULATION (IMPROVED) ----
+  metrics.counters.fpsWindowUpdates++;
+
+  const elapsed = now - metrics.counters.fpsWindowStart;
+
+  // Calculate rolling FPS (more accurate)
+  if (elapsed >= 1000) {
+    // Exact FPS for completed second
+    metrics.performance.fps = Math.round(
+      (metrics.counters.fpsWindowUpdates / elapsed) * 1000
+    );
+    metrics.performance.updatesPerSecond = metrics.counters.fpsWindowUpdates;
     
-    metrics.performance.fps = recentUpdates;
-    metrics.counters.updatesPerSecond = recentUpdates;
-    metrics.counters.lastFpsUpdate = now;
-  } else if (metrics.updates === 1) {
-    // Initialize on first update
-    metrics.performance.fps = 1;
-    metrics.counters.updatesPerSecond = 1;
+    // Reset for next window
+    metrics.counters.fpsWindowStart = now;
+    metrics.counters.fpsWindowUpdates = 0;
+  } else {
+    // Estimate FPS for incomplete second
+    const estimatedFps = elapsed > 0 
+      ? (metrics.counters.fpsWindowUpdates / elapsed) * 1000 
+      : 0;
+    metrics.performance.fps = Math.round(estimatedFps);
   }
 
-  // Patches per update
-  metrics.counters.patchesPerUpdate = 
-    metrics.patches.total / metrics.updates;
+  // ---- ACTIVE NODES ----
+  metrics.nodes.active = Math.max(0, metrics.nodes.created - metrics.nodes.removed);
 
-  // Active nodes
-  metrics.nodes.active = 
-    metrics.nodes.created - metrics.nodes.removed;
+  // ---- NODE HISTORY (PER UPDATE) ----
+  metrics.nodes.history.push(metrics.nodes.active);
+
+  if (metrics.nodes.history.length > metrics.history.maxHistorySize) {
+    metrics.nodes.history.shift();
+  }
+
+  // Update slowest patch type
+  updateSlowestPatchType(metrics);
 }
 
 /**
@@ -162,4 +180,120 @@ export function updateSlowestPatchType(metrics: RendererMetrics): void {
   }
 
   metrics.performance.slowestPatchType = slowest;
+}
+
+/**
+ * Calculate average patches per update from recent history
+ */
+function calculateAvgPatchesPerUpdate(metrics: RendererMetrics): number {
+  const recentPatchCounts = metrics.history.patchCounts.slice(-10);
+  return recentPatchCounts.length > 0
+    ? recentPatchCounts.reduce((sum, count) => sum + count, 0) / recentPatchCounts.length
+    : 0;
+}
+
+/**
+ * Get performance summary for display
+ */
+export function getPerformanceSummary(metrics: RendererMetrics): {
+  fps: number;
+  avgUpdateMs: number;
+  peakUpdateMs: number;
+  updatesPerSecond: number;
+  totalUpdates: number;
+  avgPatchesPerUpdate: number;
+} {
+  return {
+    fps: metrics.performance.fps,
+    avgUpdateMs: metrics.avgUpdateDurationMs,  // ← Already exists at top level
+    peakUpdateMs: metrics.performance.peakUpdateMs,
+    updatesPerSecond: metrics.performance.updatesPerSecond,
+    totalUpdates: metrics.updates,
+    avgPatchesPerUpdate: calculateAvgPatchesPerUpdate(metrics)
+  };
+}
+
+/**
+ * Get patch type breakdown (percentage)
+ */
+export function getPatchBreakdown(metrics: RendererMetrics): Array<{
+  type: Patch['type'];
+  count: number;
+  percentage: number;
+}> {
+  const result = [];
+  
+  for (const [type, count] of Object.entries(metrics.patches.byType)) {
+    const percentage = metrics.patches.total > 0 
+      ? (count / metrics.patches.total) * 100 
+      : 0;
+    
+    result.push({
+      type: type as Patch['type'],
+      count,
+      percentage: Math.round(percentage * 100) / 100 // 2 decimal places
+    });
+  }
+  
+  // Sort by count (descending)
+  return result.sort((a, b) => b.count - a.count);
+}
+
+/**
+ * Reset all metrics (useful for stress tests)
+ */
+export function resetMetrics(metrics: RendererMetrics): void {
+  metrics.updates = 0;
+  metrics.lastUpdateDurationMs = 0;
+  metrics.totalUpdateDurationMs = 0;
+  metrics.avgUpdateDurationMs = 0;
+  
+  metrics.patches.total = 0;
+  for (const key in metrics.patches.byType) {
+    metrics.patches.byType[key as Patch['type']] = 0;
+  }
+  
+  metrics.nodes.created = 0;
+  metrics.nodes.removed = 0;
+  metrics.nodes.active = 0;
+  metrics.nodes.history = [];
+  
+  metrics.history.durations = [];
+  metrics.history.timestamps = [];
+  metrics.history.patchCounts = [];
+  
+  metrics.performance.fps = 0;
+  metrics.performance.peakUpdateMs = 0;
+  metrics.performance.slowestPatchType = null;
+  metrics.performance.updatesPerSecond = 0;
+  
+  metrics.counters.fpsWindowStart = performance.now();
+  metrics.counters.fpsWindowUpdates = 0;
+  metrics.counters.lastSecondUpdates = 0;
+}
+
+/**
+ * Get a formatted string representation of metrics
+ */
+export function formatMetrics(metrics: RendererMetrics): string {
+  const summary = getPerformanceSummary(metrics);
+  const breakdown = getPatchBreakdown(metrics);
+  
+  let output = `=== Weave VDOM Metrics ===\n`;
+  output += `Updates: ${summary.totalUpdates}\n`;
+  output += `FPS: ${summary.fps}\n`;
+  output += `Avg Update: ${summary.avgUpdateMs.toFixed(2)}ms\n`;
+  output += `Peak Update: ${summary.peakUpdateMs.toFixed(2)}ms\n`;
+  output += `Updates/sec: ${summary.updatesPerSecond}\n`;
+  output += `Avg Patches/Update: ${summary.avgPatchesPerUpdate.toFixed(1)}\n`;
+  output += `Active Nodes: ${metrics.nodes.active}\n`;
+  output += `Nodes Created: ${metrics.nodes.created}\n`;
+  output += `Nodes Removed: ${metrics.nodes.removed}\n`;
+  output += `\nPatch Breakdown:\n`;
+  
+  for (const item of breakdown) {
+    output += `  ${item.type}: ${item.count} (${item.percentage}%)\n`;
+  }
+  
+  return output;
 }

@@ -1,4 +1,3 @@
-
 import type {
   VNode,
   VNodeChildren,
@@ -6,6 +5,12 @@ import type {
   VNodeProps,
   VNodeType
 } from './types.js';
+
+/**
+ * Internal VNode identity counter.
+ * Used by the renderer only — never exposed publicly.
+ */
+let vnodeId = 0;
 
 /**
  * Create an immutable VNode.
@@ -24,6 +29,14 @@ export function createVNode(
     children,
     key
   };
+
+  // 🔒 Internal stable identity (non-enumerable, renderer-only)
+  Object.defineProperty(vnode, '__id', {
+    value: vnodeId++,
+    enumerable: false,
+    writable: false,
+    configurable: false
+  });
 
   // Always freeze (safe, deterministic, platform-agnostic)
   Object.freeze(vnode);
