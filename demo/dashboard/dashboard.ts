@@ -4,13 +4,23 @@ import type { RendererMetrics, PatchHistoryEntry } from '../../src/renderer/metr
 
 // ==================== STATE ====================
 
+/**
+ * Simple counter used by the interactive demo.
+ * Each increment/decrement triggers a VDOM update.
+ */
 let demoCounter = 0;
+
+/**
+ * Root controller returned by mount().
+ * Used to trigger updates and access metrics.
+ */
 let dashboardRoot: ReturnType<typeof mount> | null = null;
 
 // ==================== HELPERS ====================
 
 /**
- * Format timestamp to readable time
+ * Format timestamp to readable time.
+ * Used in the patch timeline.
  */
 function formatTime(timestamp: number): string {
   const date = new Date(timestamp);
@@ -22,7 +32,8 @@ function formatTime(timestamp: number): string {
 }
 
 /**
- * Get shortened patch description
+ * Generate a short, human-readable description
+ * of a patch operation for the timeline.
  */
 function getPatchDescription(entry: PatchHistoryEntry): string {
   const { patch } = entry;
@@ -52,7 +63,8 @@ function getPatchDescription(entry: PatchHistoryEntry): string {
 // ==================== COMPONENTS ====================
 
 /**
- * Metric Card Component (Compact Version)
+ * Small reusable metric card.
+ * Displays a single metric value.
  */
 function MetricCard(label: string, value: string, unit: string): VNode {
   return h('div', { class: 'metric-card' }, [
@@ -63,8 +75,10 @@ function MetricCard(label: string, value: string, unit: string): VNode {
 }
 
 /**
- * Patch Timeline Component
- * Shows recent patch operations with color coding
+ * Patch Timeline Component.
+ *
+ * Displays the most recent patch operations
+ * in reverse chronological order.
  */
 function PatchTimeline(history: PatchHistoryEntry[]): VNode {
   // Show last 15 patches in reverse order (newest first)
@@ -95,8 +109,10 @@ function PatchTimeline(history: PatchHistoryEntry[]): VNode {
 }
 
 /**
- * Patch Heatmap Component
- * Visualizes patch operation distribution with horizontal bars
+ * Patch Heatmap Component.
+ *
+ * Shows the distribution of patch types
+ * using horizontal bars.
  */
 function PatchHeatmap(metrics: RendererMetrics): VNode {
   const patchTypes: Array<keyof RendererMetrics['patches']['byType']> = [
@@ -136,8 +152,10 @@ function PatchHeatmap(metrics: RendererMetrics): VNode {
 }
 
 /**
- * Live Chart Component with Axis Labels
- * Displays update duration trend as vertical bars with Y-axis labels
+ * Live Chart Component.
+ *
+ * Displays recent update durations as vertical bars.
+ * Includes a simple Y-axis for scale.
  */
 function LiveChart(durations: number[]): VNode {
   const recentDurations = durations.slice(-20);
@@ -181,8 +199,10 @@ function LiveChart(durations: number[]): VNode {
 }
 
 /**
- * Interactive Demo Component
- * Counter with increment/decrement buttons to generate real updates
+ * Interactive Demo Component.
+ *
+ * A simple counter that triggers real VDOM updates.
+ * Used to generate live metrics.
  */
 function InteractiveDemo(
   counter: number, 
@@ -207,8 +227,9 @@ function InteractiveDemo(
 }
 
 /**
- * Main Dashboard Component
- * Combines all sections into a complete dashboard with improved layout
+ * Main Dashboard Component.
+ *
+ * Composes all sections into a single layout.
  */
 function Dashboard(
   metrics: RendererMetrics,
@@ -225,7 +246,7 @@ function Dashboard(
       h('div', { class: 'dashboard-subtitle' }, 'Live Metrics Dashboard')
     ]),
 
-    // Metrics Grid (Compact)
+    // Metrics Grid
     h('div', { class: 'section metrics-section' }, [
       h('div', { class: 'section-title' }, 'Performance Metrics'),
       h('div', { class: 'metrics-grid' }, [
@@ -248,7 +269,7 @@ function Dashboard(
       PatchHeatmap(metrics)
     ]),
 
-    // Chart with Axis Labels
+    // Duration Chart
     h('div', { class: 'section chart-section' }, [
       h('div', { class: 'section-title' }, 'Update Duration Trend'),
       LiveChart(metrics.history.durations)
@@ -265,7 +286,7 @@ function Dashboard(
 // ==================== RENDER LOGIC ====================
 
 /**
- * Re-render the dashboard with current metrics
+ * Re-render the dashboard with current metrics.
  */
 function renderDashboard(): void {
   if (!dashboardRoot) return;
@@ -289,7 +310,7 @@ function renderDashboard(): void {
 // ==================== INITIALIZATION ====================
 
 /**
- * Initialize the dashboard
+ * Initialize the dashboard.
  */
 function init(): void {
   const container = document.getElementById('dashboard');
@@ -298,7 +319,7 @@ function init(): void {
     return;
   }
 
-  // Create initial placeholder
+  // Initial placeholder UI
   const initialVNode = h('div', { class: 'dashboard-container' }, [
     h('div', { class: 'dashboard-header' }, [
       h('h1', { class: 'dashboard-title' }, 'Weave VDOM'),
@@ -306,10 +327,10 @@ function init(): void {
     ])
   ]);
 
-  // Mount to get dashboardRoot with real metrics
+  // Mount and obtain root controller
   dashboardRoot = mount(initialVNode, container as HTMLElement);
 
-  // Immediately render with real metrics
+  // Render real dashboard immediately
   renderDashboard();
 }
 

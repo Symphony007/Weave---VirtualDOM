@@ -1,11 +1,25 @@
 import type { Patch } from '../core/patch-types.js';
 
+/**
+ * Represents a single patch event in the timeline.
+ * Used for visualizations in the dashboard.
+ */
 export interface PatchHistoryEntry {
   timestamp: number;
   patch: Patch;
   vnodeId?: number;
 }
 
+/**
+ * Central metrics object for the renderer.
+ *
+ * Tracks:
+ * - Update timings
+ * - Patch statistics
+ * - Node lifecycle counts
+ * - Performance indicators (FPS, peaks, etc.)
+ * - Patch timeline for visual debugging
+ */
 export interface RendererMetrics {
   updates: number;
   lastUpdateDurationMs: number;
@@ -44,11 +58,16 @@ export interface RendererMetrics {
     lastSecondUpdates: number;
   };
 
-  // NEW: Patch timeline
+  // Timeline of recent patches
   patchHistory: PatchHistoryEntry[];
   maxPatchHistory: number;
 }
 
+/**
+ * Create a fresh metrics object.
+ *
+ * All counters start at zero.
+ */
 export function createMetrics(): RendererMetrics {
   return {
     updates: 0,
@@ -97,14 +116,16 @@ export function createMetrics(): RendererMetrics {
       lastSecondUpdates: 0
     },
 
-    // NEW: Initialize patch history
+    // Initialize patch timeline
     patchHistory: [],
     maxPatchHistory: 50
   };
 }
 
 /**
- * Record a single patch operation
+ * Record a single patch operation.
+ *
+ * Adds it to the timeline used by the dashboard.
  */
 export function recordPatch(
   metrics: RendererMetrics,
@@ -115,23 +136,28 @@ export function recordPatch(
     patch: patch
   };
 
-  // Extract VNode ID if available
+  // Attempt to extract internal VNode ID if present
   if ('vnode' in patch && patch.vnode) {
     const vnode = patch.vnode as { __id?: number };
     entry.vnodeId = vnode.__id;
   }
 
-
   metrics.patchHistory.push(entry);
 
-  // Keep only recent patches
+  // Keep only the most recent entries
   if (metrics.patchHistory.length > metrics.maxPatchHistory) {
     metrics.patchHistory.shift();
   }
 }
 
 /**
- * Record a completed update with timing info
+ * Record a completed update cycle.
+ *
+ * Updates:
+ * - Timing metrics
+ * - FPS calculations
+ * - Node counts
+ * - History arrays
  */
 export function recordUpdate(
   metrics: RendererMetrics,
@@ -145,7 +171,7 @@ export function recordUpdate(
   metrics.lastUpdateDurationMs = duration;
   metrics.totalUpdateDurationMs += duration;
   
-  // Safe average calculation (avoid division by zero)
+  // Safe average calculation
   metrics.avgUpdateDurationMs = metrics.updates > 0 
     ? metrics.totalUpdateDurationMs / metrics.updates 
     : 0;
@@ -162,18 +188,18 @@ export function recordUpdate(
   history.timestamps.push(now);
   history.patchCounts.push(patchCount);
 
+  // Keep history bounded
   if (history.durations.length > history.maxHistorySize) {
     history.durations.shift();
     history.timestamps.shift();
     history.patchCounts.shift();
   }
 
-  // ---- FPS CALCULATION (IMPROVED) ----
+  // ---- FPS CALCULATION ----
   metrics.counters.fpsWindowUpdates++;
 
   const elapsed = now - metrics.counters.fpsWindowStart;
 
-  // Calculate rolling FPS (more accurate)
   if (elapsed >= 1000) {
     // Exact FPS for completed second
     metrics.performance.fps = Math.round(
@@ -181,11 +207,11 @@ export function recordUpdate(
     );
     metrics.performance.updatesPerSecond = metrics.counters.fpsWindowUpdates;
     
-    // Reset for next window
+    // Reset window
     metrics.counters.fpsWindowStart = now;
     metrics.counters.fpsWindowUpdates = 0;
   } else {
-    // Estimate FPS for incomplete second
+    // Estimate FPS for partial second
     const estimatedFps = elapsed > 0 
       ? (metrics.counters.fpsWindowUpdates / elapsed) * 1000 
       : 0;
@@ -193,9 +219,12 @@ export function recordUpdate(
   }
 
   // ---- ACTIVE NODES ----
-  metrics.nodes.active = Math.max(0, metrics.nodes.created - metrics.nodes.removed);
+  metrics.nodes.active = Math.max(
+    0,
+    metrics.nodes.created - metrics.nodes.removed
+  );
 
-  // ---- NODE HISTORY (PER UPDATE) ----
+  // ---- NODE HISTORY ----
   metrics.nodes.history.push(metrics.nodes.active);
 
   if (metrics.nodes.history.length > metrics.history.maxHistorySize) {
@@ -207,7 +236,7 @@ export function recordUpdate(
 }
 
 /**
- * Find which patch type is consuming the most operations
+ * Determine which patch type has occurred most frequently.
  */
 export function updateSlowestPatchType(metrics: RendererMetrics): void {
   let max = 0;
@@ -224,7 +253,8 @@ export function updateSlowestPatchType(metrics: RendererMetrics): void {
 }
 
 /**
- * Calculate average patches per update from recent history
+ * Calculate average patches per update
+ * using recent history.
  */
 function calculateAvgPatchesPerUpdate(metrics: RendererMetrics): number {
   const recentPatchCounts = metrics.history.patchCounts.slice(-10);
@@ -234,7 +264,8 @@ function calculateAvgPatchesPerUpdate(metrics: RendererMetrics): number {
 }
 
 /**
- * Get performance summary for display
+ * Get summarized performance metrics
+ * for display in dashboards or logs.
  */
 export function getPerformanceSummary(metrics: RendererMetrics): {
   fps: number;
@@ -255,7 +286,7 @@ export function getPerformanceSummary(metrics: RendererMetrics): {
 }
 
 /**
- * Get patch type breakdown (percentage)
+ * Get patch distribution as percentages.
  */
 export function getPatchBreakdown(metrics: RendererMetrics): Array<{
   type: Patch['type'];
@@ -276,12 +307,17 @@ export function getPatchBreakdown(metrics: RendererMetrics): Array<{
     });
   }
   
-  // Sort by count (descending)
+  // Sort by most frequent patch type
   return result.sort((a, b) => b.count - a.count);
 }
 
 /**
- * Reset all metrics (useful for stress tests)
+ * Reset all metrics.
+ *
+ * Useful for:
+ * - Stress tests
+ * - Benchmarks
+ * - Fresh measurements
  */
 export function resetMetrics(metrics: RendererMetrics): void {
   metrics.updates = 0;
@@ -316,7 +352,7 @@ export function resetMetrics(metrics: RendererMetrics): void {
 }
 
 /**
- * Get a formatted string representation of metrics
+ * Convert metrics into a readable text report.
  */
 export function formatMetrics(metrics: RendererMetrics): string {
   const summary = getPerformanceSummary(metrics);
