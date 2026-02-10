@@ -1,5 +1,11 @@
 import type { Patch } from '../core/patch-types.js';
 
+export interface PatchHistoryEntry {
+  timestamp: number;
+  patch: Patch;
+  vnodeId?: number;
+}
+
 export interface RendererMetrics {
   updates: number;
   lastUpdateDurationMs: number;
@@ -37,6 +43,10 @@ export interface RendererMetrics {
     fpsWindowUpdates: number;
     lastSecondUpdates: number;
   };
+
+  // NEW: Patch timeline
+  patchHistory: PatchHistoryEntry[];
+  maxPatchHistory: number;
 }
 
 export function createMetrics(): RendererMetrics {
@@ -85,8 +95,39 @@ export function createMetrics(): RendererMetrics {
       fpsWindowStart: performance.now(),
       fpsWindowUpdates: 0,
       lastSecondUpdates: 0
-    }
+    },
+
+    // NEW: Initialize patch history
+    patchHistory: [],
+    maxPatchHistory: 50
   };
+}
+
+/**
+ * Record a single patch operation
+ */
+export function recordPatch(
+  metrics: RendererMetrics,
+  patch: Patch
+): void {
+  const entry: PatchHistoryEntry = {
+    timestamp: performance.now(),
+    patch: patch
+  };
+
+  // Extract VNode ID if available
+  if ('vnode' in patch && patch.vnode) {
+    const vnode = patch.vnode as { __id?: number };
+    entry.vnodeId = vnode.__id;
+  }
+
+
+  metrics.patchHistory.push(entry);
+
+  // Keep only recent patches
+  if (metrics.patchHistory.length > metrics.maxPatchHistory) {
+    metrics.patchHistory.shift();
+  }
 }
 
 /**
@@ -205,7 +246,7 @@ export function getPerformanceSummary(metrics: RendererMetrics): {
 } {
   return {
     fps: metrics.performance.fps,
-    avgUpdateMs: metrics.avgUpdateDurationMs,  // ← Already exists at top level
+    avgUpdateMs: metrics.avgUpdateDurationMs,
     peakUpdateMs: metrics.performance.peakUpdateMs,
     updatesPerSecond: metrics.performance.updatesPerSecond,
     totalUpdates: metrics.updates,
@@ -231,7 +272,7 @@ export function getPatchBreakdown(metrics: RendererMetrics): Array<{
     result.push({
       type: type as Patch['type'],
       count,
-      percentage: Math.round(percentage * 100) / 100 // 2 decimal places
+      percentage: Math.round(percentage * 100) / 100
     });
   }
   
@@ -270,6 +311,8 @@ export function resetMetrics(metrics: RendererMetrics): void {
   metrics.counters.fpsWindowStart = performance.now();
   metrics.counters.fpsWindowUpdates = 0;
   metrics.counters.lastSecondUpdates = 0;
+
+  metrics.patchHistory = [];
 }
 
 /**

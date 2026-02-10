@@ -1,7 +1,7 @@
 import type { VNode } from '../core/types.js';
 import type { Patch } from '../core/patch-types.js';
 import { diff } from '../core/diff.js';
-import { createMetrics, recordUpdate, updateSlowestPatchType } from './metrics.js';
+import { createMetrics, recordUpdate, updateSlowestPatchType, recordPatch } from './metrics.js';
 
 type VNodeWithId = VNode & { __id: number };
 
@@ -66,6 +66,9 @@ export function createRenderer<Node extends { textContent?: string }>(
 
       function commit(patches: Patch[]): void {
         for (const patch of patches) {
+          // ✅ Record patch in history BEFORE processing
+          recordPatch(metrics, patch);
+
           metrics.patches.total++;
           metrics.patches.byType[patch.type]++;
 

@@ -307,4 +307,4 @@ Inspired by:
 
 **Built with 💙 by Deepmalya**
 
-Questions? Open an issue or reach out!
+Questions? Open an issue or reach out!p

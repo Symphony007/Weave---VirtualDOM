@@ -47,14 +47,12 @@ function diffNonNull(prev: VNode, next: VNode): Patch[] {
       });
     }
 
-    // ✅ Only emit UPDATE if hooks exist (optimization)
-    if (next.props?.hooks?.update) {
-      patches.push({
-        type: 'UPDATE',
-        oldVNode: prev,
-        newVNode: next
-      });
-    }
+    // ✅ Always emit UPDATE to keep nodeMap in sync
+    patches.push({
+      type: 'UPDATE',
+      oldVNode: prev,
+      newVNode: next
+    });
 
     return patches;
   }
@@ -214,14 +212,14 @@ function diffNonNull(prev: VNode, next: VNode): Patch[] {
     }
   }
 
-  // ---- FINAL UPDATE (ONCE) ----
-  if (next.props?.hooks?.update) {
-    patches.push({
-      type: 'UPDATE',
-      oldVNode: prev,
-      newVNode: next
-    });
-  }
+  // ---- FINAL UPDATE (ALWAYS) ----
+  // ✅ FIX: Always emit UPDATE to keep nodeMap in sync with new VNode IDs
+  // The hook will only run if it exists, but the nodeMap always needs updating
+  patches.push({
+    type: 'UPDATE',
+    oldVNode: prev,
+    newVNode: next
+  });
 
   return patches;
 }
