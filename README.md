@@ -1,39 +1,34 @@
 # Weave VDOM
 
-A production-grade Virtual DOM reconciler built from scratch with TypeScript.
-Weave implements a platform-agnostic diffing algorithm with keyed reconciliation, lifecycle hooks, and strict immutability guarantees.
+A production‑grade Virtual DOM reconciler built from scratch with TypeScript.
+Weave implements a platform‑agnostic diffing algorithm with keyed reconciliation, lifecycle hooks, and strict immutability guarantees.
 
 ---
 
 ## 🎯 Overview
 
-Weave is a minimal but complete Virtual DOM implementation that demonstrates core concepts behind modern UI frameworks like React, Vue, and Preact.
+Weave is a minimal but complete Virtual DOM engine designed to demonstrate the core rendering principles used in modern UI frameworks such as React, Vue, and Preact.
 
-It features a clean separation between platform-agnostic diffing logic and platform-specific rendering, making it suitable for DOM, Canvas, or even native rendering targets.
+The project separates the platform‑agnostic diffing logic from the platform‑specific rendering layer. This makes Weave suitable for multiple targets including the DOM, Canvas, or even native environments.
 
 ---
 
-## ✨ Features
+## ✨ Key Features
 
 ### Core Architecture
 
-* **Platform-Agnostic Core**
-  Diffing logic has zero dependencies on the DOM or any specific platform.
-* **Keyed Reconciliation**
-  Efficient list updates using stable keys (similar to React).
-* **Non-Keyed Diffing**
-  Fallback index-based diffing for simple lists.
-* **Immutable VNodes**
-  All VNodes are frozen, ensuring predictable behavior.
-* **Type-Safe Patches**
-  Closed union of patch operations with full TypeScript inference.
+* **Platform‑agnostic diffing core** with zero DOM dependencies
+* **Keyed reconciliation** for efficient list updates
+* **Fallback non‑keyed diffing** for simple lists
+* **Immutable VNodes** using `Object.freeze()`
+* **Type‑safe patch operations** with full TypeScript inference
 
-### Advanced Features
+### Advanced Capabilities
 
 * Lifecycle hooks: `create`, `update`, `remove`
-* Identity-preserving DOM updates
-* WeakMap-based event handling
-* Built-in performance metrics
+* DOM identity preservation (nodes reused when possible)
+* WeakMap‑based event handling
+* Built‑in performance metrics
 * Zero runtime dependencies
 
 ---
@@ -43,11 +38,11 @@ It features a clean separation between platform-agnostic diffing logic and platf
 Weave generates minimal, declarative patch sets:
 
 * **REPLACE** – Replace entire subtree
-* **UPDATE_TEXT** – Update text in place
+* **UPDATE_TEXT** – Update text content in place
 * **INSERT** – Add new child at index
 * **REMOVE** – Remove child (supports async cleanup)
-* **MOVE** – Reorder existing children (keyed lists)
-* **SET_PROP / REMOVE_PROP** – Minimal prop updates
+* **MOVE** – Reorder children (keyed lists)
+* **SET_PROP / REMOVE_PROP** – Minimal property updates
 * **UPDATE** – Trigger lifecycle hooks
 
 ---
@@ -56,7 +51,7 @@ Weave generates minimal, declarative patch sets:
 
 ```
 src/
-├── core/              # Platform-agnostic VDOM core
+├── core/              # Platform‑agnostic VDOM core
 │   ├── types.ts
 │   ├── vnode.ts
 │   ├── h.ts
@@ -65,21 +60,17 @@ src/
 ├── renderer/          # Patch application layer
 │   ├── createRenderer.ts
 │   └── metrics.ts
-└── platforms/         # Platform-specific implementations
+└── platforms/         # Platform‑specific implementations
     └── dom/
         └── host.ts
 ```
 
 ### Design Principles
 
-* **Separation of Concerns**
-  Core diffing is pure logic; renderer applies patches.
-* **Immutability**
-  VNodes are frozen immediately after creation.
-* **Identity Stability**
-  Internal `__id` tracking ensures correct node reuse.
-* **Declarative Patches**
-  Renderer only executes instructions from the diff.
+* **Separation of concerns** – Diffing is pure logic; renderer applies patches
+* **Immutability** – VNodes are frozen at creation
+* **Stable identity** – Internal `__id` ensures correct node reuse
+* **Declarative patches** – Renderer executes instructions only
 
 ---
 
@@ -89,7 +80,7 @@ src/
 
 * Node.js v16 or higher
 * npm or yarn
-* Modern browser (for demos)
+* A modern browser
 
 ### Installation
 
@@ -109,52 +100,89 @@ This compiles TypeScript into the `dist/` directory.
 
 ---
 
-## 🎮 Running the Demos
+## ▶️ Running the Demos
+
+Weave includes two demos: a simple text update example and a full metrics dashboard built entirely with the VDOM.
+
+---
 
 ### Simple Demo
 
+1. Build the project:
+
 ```bash
 npm run build
-npx http-server -p 8000
 ```
 
-Open:
+2. Open the demo:
 
-```
-http://localhost:8000/demo/index.html
-```
+* Navigate to `demo/index.html`
+* Right‑click the file in VS Code
+* Select **“Open with Live Server”**
 
-**What you’ll see:**
+3. What you should see:
 
 * Initial render: `Hello from Weave`
 * After 2 seconds: text updates
-* `<h1>` element is reused (not recreated)
+* The `<h1>` element is reused (not recreated)
 
 ---
 
 ### Dashboard Demo
 
-A live metrics dashboard built entirely with Weave.
+A real‑time metrics dashboard built entirely using Weave itself. This demonstrates that the VDOM is capable of powering complex, stateful interfaces.
+
+![Weave Dashboard Demo](https://github.com/user-attachments/assets/9263a02a-b194-42e4-8cc5-08840fa69ebe)
+
+#### How to run
+
+1. Build the project and dashboard:
 
 ```bash
 npm run build
 npm run build:demo
-npx http-server -p 8000
 ```
 
-Open:
+2. Open the dashboard:
 
-```
-http://localhost:8000/demo/dashboard/index.html
-```
+* Navigate to `demo/dashboard/index.html`
+* Right‑click the file in VS Code
+* Select **“Open with Live Server”**
 
-#### Dashboard Features
+---
 
-* Real-time performance metrics
-* Patch timeline
-* Patch heatmap
-* Update duration chart
-* Interactive counter demo
+### Dashboard Metrics Explained
+
+The dashboard visualizes internal operations of the renderer in real time.
+
+**Performance Metrics**
+
+* **Updates** – Total number of VDOM update cycles
+* **Avg Time** – Average duration of each update (ms)
+* **Active Nodes** – Current DOM nodes managed by the renderer
+* **Total Patches** – Cumulative patch operations applied
+
+**Patch Timeline**
+
+* Chronological list of recent patch operations
+* Color‑coded by patch type
+* Shows timestamps and affected VNodes
+
+**Patch Heatmap**
+
+* Distribution of patch types
+* Helps identify optimization opportunities
+
+**Update Duration Chart**
+
+* Tracks performance over recent updates
+* Helps detect regressions
+
+**Interactive Controls**
+
+* Use the **+1** and **–1** buttons
+* Generates real VDOM updates
+* Watch patches apply in real time
 
 ---
 
@@ -166,7 +194,7 @@ npm test
 
 ### Test Coverage
 
-* Initial mount/unmount
+* Initial mount and unmount
 * Text updates without recreation
 * Nested updates
 * Keyed list reordering
@@ -176,9 +204,7 @@ npm test
 
 ---
 
-## 📖 Usage
-
-### Basic Example
+## 📖 Basic Usage
 
 ```ts
 import { h, mount } from './dist/src/index.js';
@@ -202,55 +228,6 @@ root.unmount();
 
 ---
 
-### Keyed Lists
-
-```ts
-const list1 = h('ul', null, [
-  h('li', { key: 'a' }, 'Item A'),
-  h('li', { key: 'b' }, 'Item B'),
-  h('li', { key: 'c' }, 'Item C')
-]);
-
-const list2 = h('ul', null, [
-  h('li', { key: 'c' }, 'Item C'),
-  h('li', { key: 'a' }, 'Item A'),
-  h('li', { key: 'b' }, 'Item B')
-]);
-
-const root = mount(list1, container);
-root.update(list2);
-```
-
----
-
-### Lifecycle Hooks
-
-```ts
-const vnode = h('div', {
-  hooks: {
-    create: (vnode, node) => console.log('created'),
-    update: (oldVNode, newVNode, node) => console.log('updated'),
-    remove: (vnode, node, done) => {
-      node.style.opacity = '0';
-      setTimeout(done, 300);
-    }
-  }
-}, 'Content');
-```
-
----
-
-### Metrics Access
-
-```ts
-console.log(root.metrics.updates);
-console.log(root.metrics.avgUpdateDurationMs);
-console.log(root.metrics.nodes.active);
-console.log(root.metrics.patches.total);
-```
-
----
-
 ## 🔧 Development
 
 ### Scripts
@@ -268,7 +245,7 @@ npm test            # Run tests
 * `renderer/` cannot import from platforms
 * `platforms/` can import from core and renderer
 
-Ensures a platform-agnostic core.
+This ensures the core remains platform‑agnostic.
 
 ---
 
@@ -292,7 +269,7 @@ Each VNode has an internal `__id`:
 
 ### Diff + Render Separation
 
-The `diff()` function only returns patches:
+The `diff()` function returns patches without applying them:
 
 * Keeps core testable
 * Enables batching
@@ -302,14 +279,14 @@ The `diff()` function only returns patches:
 
 ## 🤝 Contributing
 
-This is a learning project, but contributions are welcome.
+This is a learning‑focused project, but contributions are welcome.
 
 Possible areas:
 
 * Fragment support
 * Component abstraction
 * Async rendering
-* New platform targets
+* Additional platform targets
 * Performance benchmarks
 
 ---
@@ -318,17 +295,5 @@ Possible areas:
 
 MIT License
 
----
 
-## 🙏 Acknowledgments
-
-Inspired by:
-
-* React reconciliation
-* Preact
-* Snabbdom
-* Virtual DOM research
-
----
-
-**Built with 💙 by Deepmalya**
+**Built with 💙 by Deep**
