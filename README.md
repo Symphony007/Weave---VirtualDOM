@@ -3,16 +3,6 @@
 A production‑grade Virtual DOM reconciler built from scratch with TypeScript.
 Weave implements a platform‑agnostic diffing algorithm with keyed reconciliation, lifecycle hooks, and strict immutability guarantees.
 
----
-
-## 🎯 Overview
-
-Weave is a minimal but complete Virtual DOM engine designed to demonstrate the core rendering principles used in modern UI frameworks such as React, Vue, and Preact.
-
-The project separates the platform‑agnostic diffing logic from the platform‑specific rendering layer. This makes Weave suitable for multiple targets including the DOM, Canvas, or even native environments.
-
----
-
 ## ✨ Key Features
 
 ### Core Architecture
